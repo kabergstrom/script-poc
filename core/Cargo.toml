@@ -1,0 +1,12 @@
+[package]
+name = "script-poc-core"
+version = "0.1.0"
+authors = ["Karl"]
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+lua-jit-sys = { path = "../../lua-jit-sys"}
+regex = "1"
+sharedlib  = "7.0.0"

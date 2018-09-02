@@ -1,0 +1,12 @@
+[config]
+extend = "../workspace_makefile.toml"
+
+[tasks.format-nightly]
+args = ["fmt"]
+
+[tasks.generate-c-bindings]
+script = [
+    "cbindgen ./ -o bindings.h --lang c -c cbindgen.toml"
+]
+[tasks.post-build]
+dependencies = ["generate-c-bindings"]

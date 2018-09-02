@@ -1,0 +1,656 @@
+[config]
+init_task = "init"
+end_task = "end"
+skip_core_tasks = false
+
+[env]
+RUST_BACKTRACE = "full"
+KCOV_VERSION = "34"
+CARGO_MAKE_KCOV_EXCLUDE_LINE = "kcov-ignore"
+CARGO_MAKE_KCOV_EXCLUDE_REGION = "kcov-ignore-start:kcov-ignore-end"
+CARGO_MAKE_TEST_COVERAGE_BINARY_FILTER = "${CARGO_MAKE_CRATE_FS_NAME}-[a-z0-9]*$\\|test_[a-z0-9]*-[a-z0-9]*$"
+
+[tasks.empty]
+description = "Empty Task"
+
+[tasks.default]
+description = "Default task points to the development testing flow"
+alias = "dev-test-flow"
+
+[tasks.ci-flow]
+description = "CI task will run cargo build and cargo test with verbose output"
+dependencies = [
+    "pre-ci-flow",
+    "pre-build",
+    "build-verbose",
+    "post-build",
+    "pre-test",
+    "test-verbose",
+    "post-test",
+    "examples-ci-flow",
+    "bench-ci-flow",
+    "ci-coverage-flow",
+    "post-ci-flow"
+]
+
+[tasks.workspace-ci-flow]
+description = "CI task will run CI flow for each member and merge coverage reports"
+dependencies = [
+    "pre-workspace-ci-flow",
+    "workspace-members-ci",
+    "workspace-coverage-pack",
+    "post-workspace-ci-flow"
+]
+
+[tasks.dev-test-flow]
+description = "Development testing flow will first format the code, and than run cargo build and test"
+dependencies = [
+    "format-flow",
+    "pre-build",
+    "build",
+    "post-build",
+    "test-flow"
+]
+
+[tasks.dev-watch-flow]
+description = "Alias for test-flow"
+alias = "test-flow"
+
+[tasks.watch-flow]
+description = "Watches for any file change and if any change is detected, it will invoke the test flow."
+command = "cargo"
+args = ["watch", "--exec", "make dev-watch-flow"]
+
+[tasks.pre-publish-clean-flow]
+description = "Clears old artifactes before publishing"
+dependencies = [
+    "pre-clean",
+    "clean",
+    "post-clean"
+]
+
+[tasks.pre-publish-conditioned-clean-flow]
+description = "Clears old artifactes before publishing"
+condition = { env_not_set = [ "CARGO_MAKE_SKIP_PREPUBLISH_CLEAN" ] }
+run_task = "pre-publish-clean-flow"
+
+[tasks.publish-flow]
+description = "Publish flow - First clean the target directory of any old leftovers, package and publish"
+dependencies = [
+    "pre-publish-conditioned-clean-flow",
+    "pre-publish",
+    "publish",
+    "post-publish"
+]
+
+[tasks.build-flow]
+# This is the full sanity testing flow which includes:
+# cleanup of old build
+# generating docs and moving them to the docs folder
+# running cargo build and test
+# running cargo plugins such as security and dependency validations
+description = "Full sanity testing flow."
+dependencies = [
+    "init-build-flow",
+    "pre-clean",
+    "clean-apidocs",
+    "clean",
+    "post-clean",
+    "format-flow",
+    "pre-build",
+    "build",
+    "post-build",
+    "test-flow",
+    "examples-ci-flow",
+    "bench-ci-flow",
+    "pre-verify-project",
+    "verify-project",
+    "post-verify-project",
+    "pre-audit",
+    "audit",
+    "post-audit",
+    "pre-outdated",
+    "outdated",
+    "post-outdated",
+    "pre-docs",
+    "docs",
+    "post-docs",
+    "copy-apidocs",
+    "end-build-flow"
+]
+
+[tasks.init]
+description = "By default this task is invoked at the start of every cargo-make run."
+
+[tasks.end]
+description = "By default this task is invoked at the end of every cargo-make run."
+
+[tasks.init-build-flow]
+
+[tasks.pre-clean]
+
+[tasks.clean-apidocs]
+description = "Delete API docs."
+command = "rm"
+args = ["-Rf", "./docs/api"]
+
+[tasks.clean]
+description = "Runs the cargo clean command."
+command = "cargo"
+args = ["clean"]
+
+[tasks.post-clean]
+
+[tasks.delete-lock]
+description = "Deletes the Cargo.lock file."
+script_runner = "@shell"
+script = [
+    "rm -f ./Cargo.lock"
+]
+
+[tasks.upgrade-dependencies]
+description = "Rebuilds the crate with most updated dependencies."
+dependencies = [
+    "delete-lock",
+    "dev-test-flow"
+]
+
+[tasks.pre-format]
+
+[tasks.format-stable]
+description = "Runs the cargo rustfmt plugin."
+condition = { channels = [ "stable", "beta" ] }
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--write-mode=overwrite", "--force"]
+
+[tasks.format-nightly]
+description = "Runs the cargo rustfmt nightly plugin."
+condition = { channels = [ "nightly" ] }
+install_crate = "rustfmt-nightly"
+command = "cargo"
+args = ["fmt", "--", "--write-mode=overwrite"]
+
+[tasks.format]
+description = "Runs the cargo rustfmt plugin."
+dependencies = [
+    "format-stable",
+    "format-nightly"
+]
+
+[tasks.post-format]
+
+[tasks.format-flow]
+description = "Runs the cargo rustfmt plugin as part of a flow."
+dependencies = [
+    "pre-format",
+    "format",
+    "post-format"
+]
+
+[tasks.pre-docs]
+
+[tasks.docs]
+description = "Generate rust documentation."
+command = "cargo"
+args = ["doc", "--no-deps"]
+
+[tasks.post-docs]
+
+[tasks.pre-build]
+
+[tasks.build]
+description = "Runs the rust compiler."
+command = "cargo"
+args = ["build", "--all-features"]
+
+[tasks.build-verbose]
+description = "Runs the rust compiler with verbose output."
+command = "cargo"
+args = ["build", "--verbose", "--all-features"]
+
+[tasks.build-release]
+description = "Runs release build."
+command = "cargo"
+args = ["build", "--release", "--all-features"]
+
+[tasks.post-build]
+
+[tasks.pre-test]
+
+[tasks.test]
+description = "Runs all available tests."
+command = "cargo"
+args = ["test", "--all-features"]
+
+[tasks.test-flow]
+description = "Runs pre/post hooks and cargo test."
+dependencies = [
+    "pre-test",
+    "test",
+    "post-test"
+]
+
+[tasks.test-verbose]
+description = "Runs all available tests with verbose output."
+command = "cargo"
+args = ["test", "--verbose", "--all-features"]
+
+[tasks.post-test]
+
+[tasks.pre-bench]
+
+[tasks.bench]
+description = "Runs all available bench files."
+command = "cargo"
+args = ["bench", "--all-features"]
+
+[tasks.post-bench]
+
+[tasks.bench-flow]
+description = "Runs a bench flow."
+dependencies = [
+    "pre-bench",
+    "bench",
+    "post-bench"
+]
+
+[tasks.bench-conditioned-flow]
+description = "Runs the bench flow if conditions are met."
+condition = { env_set = [ "CARGO_MAKE_RUN_BENCH" ], channels = [ "nightly" ] }
+run_task = "bench-flow"
+
+[tasks.bench-compile]
+description = "Compiles all available bench files."
+command = "cargo"
+args = ["build", "--benches", "--all-features"]
+
+[tasks.bench-conditioned-compile]
+description = "Compiles all available bench files if conditions are met."
+condition = { env_set = [ "CARGO_MAKE_BUILD_BENCH" ], channels = [ "nightly" ] }
+run_task = "bench-compile"
+
+[tasks.bench-ci-flow]
+description = "Runs/Compiles the benches if conditions are met."
+dependencies = [
+    "bench-conditioned-compile",
+    "bench-conditioned-flow"
+]
+
+[tasks.pre-check]
+
+[tasks.check]
+description = "Runs cargo check."
+command = "cargo"
+args = ["check"]
+
+[tasks.post-check]
+
+[tasks.check-flow]
+description = "Runs cargo check flow."
+dependencies = [
+    "pre-check",
+    "check",
+    "post-check"
+]
+
+[tasks.check-tests]
+description = "Runs cargo check for project tests."
+command = "cargo"
+args = ["check", "--tests"]
+
+[tasks.check-examples]
+description = "Runs cargo check for project examples."
+command = "cargo"
+args = ["check", "--examples"]
+
+[tasks.examples-compile]
+description = "Runs cargo build for project examples."
+command = "cargo"
+args = ["build", "--examples"]
+
+[tasks.examples-conditioned-compile]
+description = "Runs cargo build for project examples if conditions are met."
+condition = { env_set = [ "CARGO_MAKE_BUILD_EXAMPLES" ] }
+run_task = "examples-compile"
+
+[tasks.examples-ci-flow]
+description = "Compiles the examples if conditions are met."
+dependencies = [
+    "examples-conditioned-compile"
+]
+
+[tasks.pre-verify-project]
+
+[tasks.verify-project]
+description = "Runs verify-project cargo plugin."
+command = "cargo"
+args = ["verify-project"]
+
+[tasks.post-verify-project]
+
+[tasks.pre-audit]
+
+[tasks.audit]
+description = "Runs verify-audit cargo plugin."
+condition = { env = { "CARGO_MAKE_CRATE_HAS_DEPENDENCIES" = "TRUE", "CARGO_MAKE_CRATE_LOCK_FILE_EXISTS" = "TRUE" } }
+command = "cargo"
+args = ["audit"]
+
+[tasks.post-audit]
+
+[tasks.pre-outdated]
+
+[tasks.outdated]
+description = "Runs verify-outdated cargo plugin."
+condition = { env = { "CARGO_MAKE_CRATE_HAS_DEPENDENCIES" = "TRUE" } }
+command = "cargo"
+args = ["outdated", "--root-deps-only", "--exit-code", "1"]
+
+[tasks.post-outdated]
+
+[tasks.clippy]
+description = "Runs clippy code linter."
+install_crate = "clippy"
+command = "cargo"
+args = ["clippy"]
+
+[tasks.copy-apidocs]
+description = "Copies the generated documentation to the docs/api directory."
+script_runner = "@shell"
+script = [
+    "mkdir -p ./docs/api",
+    "mv ./target/doc/* ./docs/api"
+]
+
+[tasks.end-build-flow]
+
+[tasks.pre-package]
+
+[tasks.package]
+description = "Runs the cargo package command."
+command = "cargo"
+args = ["package"]
+
+[tasks.post-package]
+
+[tasks.pre-publish]
+
+[tasks.publish]
+description = "Runs the cargo publish command."
+command = "cargo"
+args = ["publish"]
+
+[tasks.post-publish]
+
+[tasks.pre-git-add]
+
+[tasks.git-add]
+description = "Runs the cargo add command."
+command = "git"
+args = ["add", "."]
+
+[tasks.post-git-add]
+
+[tasks.pre-git-status]
+
+[tasks.git-status]
+description = "Runs git status command."
+command = "git"
+args = ["status"]
+
+[tasks.post-git-status]
+
+[tasks.pre-git-commit]
+
+[tasks.git-commit]
+description = "Runs git commit command."
+command = "git"
+args = ["commit"]
+
+[tasks.git-commit-message]
+description = "Runs git commit command with the message defined in the COMMIT_MSG environment variable."
+script_runner = "@shell"
+script = [
+    "git commit -m \"${COMMIT_MSG}\""
+]
+
+[tasks.post-git-commit]
+
+[tasks.pre-git-push]
+
+[tasks.git-push]
+description = "Runs git push command."
+command = "git"
+args = ["push"]
+
+[tasks.post-git-push]
+
+[tasks.git-pull]
+description = "Runs git pull command."
+command = "git"
+args = ["pull"]
+
+[tasks.pre-ci-flow]
+
+[tasks.post-ci-flow]
+
+[tasks.do-on-members]
+description = "Runs the requested task for every workspace member."
+script_runner = "@shell"
+script = [
+'''
+#prevent codecov publish in member builds
+export CARGO_MAKE_SKIP_CODECOV="true"
+
+export CARGO_MAKE_WORKSPACE_TARGET_DIRECTORY="${CARGO_MAKE_WORKING_DIRECTORY}/target"
+
+#output coverage data goes into workspace level
+export CARGO_MAKE_COVERAGE_REPORT_DIRECTORY="${CARGO_MAKE_WORKSPACE_TARGET_DIRECTORY}/coverage"
+
+cargo make --loglevel=${CARGO_MAKE_LOG_LEVEL} ${CARGO_MAKE_MEMBER_TASK}
+
+unset CARGO_MAKE_COVERAGE_REPORT_DIRECTORY
+unset CARGO_MAKE_WORKSPACE_TARGET_DIRECTORY
+unset CARGO_MAKE_SKIP_CODECOV
+'''
+]
+
+[tasks.do-on-members.windows]
+clear = true
+script = [
+'''
+cargo make --loglevel=%CARGO_MAKE_LOG_LEVEL% %CARGO_MAKE_MEMBER_TASK%
+if %errorlevel% neq 0 exit /b %errorlevel%
+'''
+]
+
+[tasks.pre-workspace-ci-flow]
+
+[tasks.post-workspace-ci-flow]
+
+[tasks.workspace-members-ci]
+description = "Runs the ci-flow for every workspace member."
+env = { "CARGO_MAKE_MEMBER_TASK" = "ci-flow" }
+run_task = "do-on-members"
+
+[tasks.workspace-members-coverage]
+description = "Runs the ci-flow for every workspace member."
+env = { "CARGO_MAKE_MEMBER_TASK" = "coverage" }
+run_task = "do-on-members"
+
+[tasks.workspace-coverage]
+description = "Runs coverage task for all members and packages all of them (by default the codecov flow)."
+dependencies = [
+    "workspace-members-coverage",
+    "workspace-coverage-pack"
+]
+
+[tasks.workspace-coverage-pack]
+description = "Publishes all member coverage reports."
+linux_alias = "codecov"
+
+[tasks.pre-coverage]
+
+[tasks.coverage]
+description = "Runs coverage (by default using kcov)."
+alias = "coverage-kcov"
+
+[tasks.coverage-kcov]
+description = "Installs (if missing) and runs coverage using kcov (not supported on windows)"
+windows_alias = "empty"
+condition = { env_set = [ "KCOV_VERSION" ] }
+install_script = [
+'''
+command -v kcov >/dev/null 2>&1 || {
+    if [ "$(grep -Ei 'debian|buntu|mint' /etc/*release)" ]; then
+        sudo apt-get update || true
+        sudo apt-get install -y libcurl4-openssl-dev libelf-dev libdw-dev cmake gcc binutils-dev
+
+        wget https://github.com/SimonKagstrom/kcov/archive/v$KCOV_VERSION.zip
+        unzip v$KCOV_VERSION.zip
+        cd kcov-$KCOV_VERSION
+        mkdir build
+        cd ./build
+        cmake ..
+        make
+        sudo make install
+        cd ../..
+        rm -rf kcov-$KCOV_VERSION
+    fi
+}
+'''
+]
+script = [
+'''
+echo "Working Directory: ${CARGO_MAKE_WORKING_DIRECTORY}"
+
+TARGET_DIRECTORY="target/coverage"
+if [ -n "$CARGO_MAKE_COVERAGE_REPORT_DIRECTORY" ]; then
+    TARGET_DIRECTORY="$CARGO_MAKE_COVERAGE_REPORT_DIRECTORY"
+    mkdir -p ${TARGET_DIRECTORY}
+else
+    mkdir -p ./target/coverage
+fi
+
+BINARY_DIRECTORY=target/debug
+if [ -n "$CARGO_MAKE_WORKSPACE_TARGET_DIRECTORY" ]; then
+    BINARY_DIRECTORY="${CARGO_MAKE_WORKSPACE_TARGET_DIRECTORY}/debug"
+fi
+
+KCOV_EXCLUDE_LINE_ARG=""
+if [ -n "$CARGO_MAKE_KCOV_EXCLUDE_LINE" ]; then
+    KCOV_EXCLUDE_LINE_ARG="--exclude-line=${CARGO_MAKE_KCOV_EXCLUDE_LINE}"
+fi
+
+KCOV_EXCLUDE_REGION_ARG=""
+if [ -n "$CARGO_MAKE_KCOV_EXCLUDE_REGION" ]; then
+    KCOV_EXCLUDE_REGION_ARG="--exclude-region=${CARGO_MAKE_KCOV_EXCLUDE_REGION}"
+fi
+
+echo "Running tests from directory: ${BINARY_DIRECTORY}"
+
+# Evaluate variables that may be in the expression
+# This allows us to do double expansion on a non-variable second expansion
+CARGO_MAKE_TEST_COVERAGE_BINARY_FILTER_REGEX="$(sh -c "echo \"${CARGO_MAKE_TEST_COVERAGE_BINARY_FILTER}\"")"
+echo "Test binary filter regex: ${CARGO_MAKE_TEST_COVERAGE_BINARY_FILTER_REGEX}"
+
+for file in $(find "${BINARY_DIRECTORY}" -maxdepth 1 -type f | grep -e "${CARGO_MAKE_TEST_COVERAGE_BINARY_FILTER_REGEX}")
+do
+    echo "Running coverage for file: $file"
+    kcov --include-pattern=${CARGO_MAKE_WORKING_DIRECTORY}/src/ ${KCOV_EXCLUDE_LINE_ARG} ${KCOV_EXCLUDE_REGION_ARG} "$TARGET_DIRECTORY" "$file" || true
+done
+'''
+]
+
+[tasks.coverage-tarpaulin]
+description = "Runs coverage using tarpaulin rust crate (linux only)"
+
+[tasks.coverage-tarpaulin.linux]
+command = "cargo"
+args = ["tarpaulin"]
+
+[tasks.post-coverage]
+
+[tasks.coverage-flow]
+description = "Runs the full coverage flow."
+dependencies = [
+    "pre-coverage",
+    "coverage",
+    "post-coverage"
+]
+
+[tasks.codecov]
+description = "Runs codecov script to upload coverage results to codecov."
+windows_alias = "empty"
+script_runner = "bash"
+condition = { env_not_set = [ "CARGO_MAKE_SKIP_CODECOV" ] }
+script = [
+    "#!/usr/bin/env bash",
+    "bash <(curl -s https://codecov.io/bash)"
+]
+
+[tasks.codecov-flow]
+description = "Runs the full coverage flow and uploads the results to codecov."
+windows_alias = "empty"
+dependencies = [
+    "coverage-flow",
+    "codecov"
+]
+
+[tasks.ci-coverage-flow]
+description = "Runs the coverage flow and uploads the results to codecov."
+condition = { platforms = ["linux"], env = { "TRAVIS" = "true", "CARGO_MAKE_RUN_CODECOV" = "true" } }
+run_task = "codecov-flow"
+
+[tasks.upload-artifacts]
+description = "Uploads the binary artifact from the cargo package/publish output."
+alias = "bintray-upload"
+
+[tasks.bintray-upload]
+description = "Uploads the binary artifact from the cargo package/publish output to bintray."
+
+[tasks.bintray-upload.linux]
+condition = { env_set = [ "BINTRAY_API_KEY", "BINTRAY_OWNER_NAME", "BINTRAY_PACKAGE_NAME" ] }
+script = [
+    "curl -T \"./target/package/${CARGO_MAKE_CRATE_NAME}-${CARGO_MAKE_CRATE_VERSION}/target/debug/${CARGO_MAKE_CRATE_NAME}\" -u${BINTRAY_OWNER_NAME}:${BINTRAY_API_KEY} -H \"X-Bintray-Package:${BINTRAY_PACKAGE_NAME}\" -H \"X-Bintray-Version:v${CARGO_MAKE_CRATE_VERSION}\" https://api.bintray.com/content/${BINTRAY_OWNER_NAME}/${CARGO_MAKE_CRATE_NAME}/${CARGO_MAKE_CRATE_NAME}_v${CARGO_MAKE_CRATE_VERSION}?override=1",
+    "curl -X POST -u${BINTRAY_OWNER_NAME}:${BINTRAY_API_KEY} https://api.bintray.com/content/${BINTRAY_OWNER_NAME}/${CARGO_MAKE_CRATE_NAME}/${BINTRAY_PACKAGE_NAME}/v${CARGO_MAKE_CRATE_VERSION}/publish"
+]
+
+[tasks.github-publish]
+# Creates a new github release.
+# Set the GITHUB_API_TOKEN environment variables to automatically authenticate.
+description = "Creates a new github release."
+command = "cargo"
+args = ["hublish"]
+
+[tasks.github-publish-custom-name]
+# Creates a new github release.
+# Set the GITHUB_API_TOKEN environment variables to automatically authenticate.
+description = "Creates a new github release."
+install_crate = "cargo-hublish"
+args = ["hublish"]
+script_runner = "@shell"
+script = [
+    "cargo hublish --url \"https://api.github.com/repos/${GITHUB_REPO_NAME}/releases\""
+]
+
+[tasks.build-publish-flow]
+description = "Runs full sanity, generates github release and publishes the crate."
+condition = { env_set = [ "COMMIT_MSG", "GITHUB_API_TOKEN", "GITHUB_REPO_NAME" ] }
+env = { "CARGO_MAKE_SKIP_PREPUBLISH_CLEAN" = "true" }
+run_task = "build-publish-flow-no-validation"
+
+[tasks.build-publish-flow-no-validation]
+dependencies = [
+    "delete-lock",
+    "build-flow",
+    "git-add",
+    "git-status",
+    "git-commit-message",
+    "git-push",
+    "github-publish-custom-name",
+    "publish-flow",
+    "upload-artifacts",
+    "git-pull"
+]
